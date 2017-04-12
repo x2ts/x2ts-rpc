@@ -46,13 +46,17 @@ abstract class RPCWrapper extends Component {
 
     /**
      * @param string $name
-     * @param array $arguments
+     * @param array  $arguments
      *
      * @return mixed
+     * @throws \x2ts\rpc\RPCException
      */
     public function __call($name, $arguments) {
         Toolkit::trace("Package: {$this->package}");
         $rpc = $this->findRpcComponentId();
+        if ($rpc === false) {
+            throw new RPCException('The rpc component cannot be found in the component configuration');
+        }
         return X::$rpc($this->package)->call($name, ...$arguments);
     }
 }
