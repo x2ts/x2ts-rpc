@@ -173,15 +173,18 @@ class RPC extends Component {
                 Toolkit::log($payload['exception']['args'][0], X_LOG_WARNING);
             }
         } catch (Throwable $e) {
-            $message = get_class($e) . ' thrown in remote file "' . $e->getFile()
-                . '" (line: ' . $e->getLine() . ') with code ' . $e->getCode() .
-                ' message: ' . $e->getMessage() . "\n\nRemote Call stack:\n"
-                . $e->getTraceAsString();
             $payload = [
                 'error'     => error_get_last(),
                 'exception' => [
                     'class' => 'RPCException',
-                    'args'  => [$message],
+                    'args'  => [[
+                        'name'  => get_class($e),
+                        'file'  => $e->getFile(),
+                        'line'  => $e->getLine(),
+                        'code'  => $e->getCode(),
+                        'msg'   => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]],
                 ],
                 'result'    => null,
             ];
