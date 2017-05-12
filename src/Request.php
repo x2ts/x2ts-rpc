@@ -59,6 +59,10 @@ class Request {
                 'reply_to'       => $replyQueue->getName(),
             ]
         );
-        return new Response($this->id, $replyQueue);
+        return new Response($this->id, $replyQueue, [
+            'name' => $this->name,
+            'args' => $this->args,
+            'void' => $this->void,
+        ]);
     }
 }

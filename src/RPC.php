@@ -15,8 +15,12 @@ use AMQPExchange;
 use AMQPQueue;
 use AMQPQueueException;
 use Throwable;
-use x2ts\Component;
-use x2ts\ExtensionNotLoadedException;
+use x2ts\{
+    Component, ComponentFactory as X, ExtensionNotLoadedException
+};
+use x2ts\rpc\event\{
+    AfterCall, AfterInvoke, BeforeCall, BeforeInvoke
+};
 use x2ts\Toolkit;
 
 
@@ -73,6 +77,13 @@ class RPC extends Component {
     }
 
     public function call(string $name, ...$args) {
+        X::bus()->dispatch(new BeforeCall([
+            'dispatcher' => $this,
+            'void'       => false,
+            'package'    => $this->package,
+            'func'       => $name,
+            'args'       => $args,
+        ]));
         $this->checkPackage();
         return (new Request($this->clientChannel, $this->package, $name, $args))->send()->getResponse();
     }
@@ -91,9 +102,26 @@ class RPC extends Component {
     public function callVoid(string $name, ...$args) {
         $this->checkPackage();
         (new Request($this->clientChannel, $this->package, $name, $args, true))->send();
+        X::bus()->dispatch(new AfterCall([
+            'dispatcher' => $this,
+            'package'    => null,
+            'func'       => $this->callInfo['name'],
+            'args'       => $this->callInfo['args'],
+            'void'       => true,
+            'result'     => null,
+            'error'      => null,
+            'exception'  => null,
+        ]));
     }
 
     public function asyncCall(string $name, ...$args): Response {
+        X::bus()->dispatch(new BeforeCall([
+            'dispatcher' => $this,
+            'void'       => false,
+            'package'    => $this->package,
+            'func'       => $name,
+            'args'       => $args,
+        ]));
         $this->checkPackage();
         return (new Request($this->clientChannel, $this->package, $name, $args))->send();
     }
@@ -152,15 +180,31 @@ class RPC extends Component {
         try {
             if (array_key_exists($callInfo['name'], $this->callbacks)) {
                 error_clear_last();
+                X::bus()->dispatch(new BeforeInvoke([
+                    'dispatcher' => $this,
+                    'void'       => (bool) $callInfo['void'],
+                    'package'    => $this->package,
+                    'func'       => $callInfo['name'],
+                    'args'       => $callInfo['args'],
+                ]));
                 $r = call_user_func_array($this->callbacks[$callInfo['name']], $callInfo['args']);
-                if ($callInfo['void']) {
-                    goto finish;
-                }
                 $payload = [
                     'error'     => error_get_last(),
                     'exception' => null,
                     'result'    => $r,
                 ];
+                X::bus()->dispatch(new AfterInvoke([
+                    'dispatcher' => $this,
+                    'void'       => (bool) $callInfo['void'],
+                    'package'    => $this->package,
+                    'func'       => $callInfo['name'],
+                    'args'       => $callInfo['args'],
+                    'error'      => $payload['error'],
+                    'result'     => $r,
+                ]));
+                if ($callInfo['void']) {
+                    goto finish;
+                }
             } else {
                 $payload = [
                     'error'     => 'Specified RPC function not exist',
@@ -177,7 +221,7 @@ class RPC extends Component {
                 'error'     => error_get_last(),
                 'exception' => [
                     'class' => 'RPCException',
-                    'args'  => [[
+                    'args'  => ['', [
                         'name'  => get_class($e),
                         'file'  => $e->getFile(),
                         'line'  => $e->getLine(),
@@ -188,7 +232,21 @@ class RPC extends Component {
                 ],
                 'result'    => null,
             ];
-            Toolkit::log($payload['exception']['args'][0], X_LOG_WARNING);
+            X::bus()->dispatch(new AfterInvoke([
+                'dispatcher' => $this,
+                'void'       => $callInfo['void'],
+                'package'    => $this->package,
+                'func'       => $callInfo['name'],
+                'error'      => $payload['error'],
+                'exception'  => $e,
+            ]));
+
+            X::logger()->trace(function () use ($e) {
+                return get_class($e) . ' thrown in remote file "' . $e->getFile()
+                    . '" (line: ' . $e->getLine() . ') with code ' . $e->getCode() .
+                    ' message: ' . $e->getMessage() . "\n\nRemote Call stack:\n"
+                    . $e->getTraceAsString();
+            });
         }
 
         reply:
@@ -258,7 +316,14 @@ class RPC extends Component {
                             . 'cause the rpc worker down. Please report this '
                             . 'issue to the rpc server administrator as soon '
                             . 'as possible.',
-                            $error['type'],
+                            [
+                                'name'  => '',
+                                'file'  => $error['file'],
+                                'line'  => $error['line'],
+                                'code'  => $error['type'],
+                                'msg'   => $error['message'],
+                                'trace' => (new \Exception())->getTraceAsString(),
+                            ],
                         ],
                     ],
                     'result'    => null,

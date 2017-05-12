@@ -12,15 +12,20 @@ namespace x2ts\rpc;
 use AMQPEnvelope;
 use AMQPQueue;
 use Throwable;
+use x2ts\ComponentFactory as X;
+use x2ts\rpc\event\AfterCall;
 
 class Response {
     private $id;
 
     private $q;
 
-    public function __construct(string $id, AMQPQueue $q) {
+    private $callInfo;
+
+    public function __construct(string $id, AMQPQueue $q, $callInfo) {
         $this->id = $id;
         $this->q = $q;
+        $this->callInfo = $callInfo;
     }
 
     public function getResponse() {
@@ -45,6 +50,16 @@ class Response {
                     }
                     $result = $returnInfo['result'];
                 }
+                X::bus()->dispatch(new AfterCall([
+                    'dispatcher' => $this,
+                    'package'    => null,
+                    'func'       => $this->callInfo['name'],
+                    'args'       => $this->callInfo['args'],
+                    'void'       => false,
+                    'result'     => $result,
+                    'error'      => $returnInfo['error'],
+                    'exception'  => $throw,
+                ]));
             }
             $q->ack($msg->getDeliveryTag());
             return false;
