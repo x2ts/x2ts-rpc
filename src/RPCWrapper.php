@@ -33,7 +33,7 @@ abstract class RPCWrapper extends Component {
     /**
      * @return bool|string
      */
-    private function findRpcComponentId() {
+    protected function findRpcComponentId() {
         /** @var array $componentArr */
         $componentArr = X::conf('component');
         foreach ($componentArr as $name => $conf) {
