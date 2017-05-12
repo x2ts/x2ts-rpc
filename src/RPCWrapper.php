@@ -30,18 +30,30 @@ abstract class RPCWrapper extends Component {
         }
     }
 
+    protected static $rpcId = '';
+
     /**
-     * @return bool|string
+     * @param string $package
+     *
+     * @return RPC
+     * @throws \x2ts\ComponentNotFoundException
      */
-    protected function findRpcComponentId() {
-        /** @var array $componentArr */
-        $componentArr = X::conf('component');
-        foreach ($componentArr as $name => $conf) {
-            if ($conf['class'] === RPC::class) {
-                return $name;
+    public static function rpc(string $package = 'common') {
+        if (empty(self::$rpcId)) {
+            /** @var array $componentArr */
+            $componentArr = X::conf('component');
+            foreach ($componentArr as $name => $conf) {
+                if ($conf['class'] === RPC::class) {
+                    self::$rpcId = $name;
+                    break;
+                }
             }
         }
-        return false;
+
+        if (empty($rpc = self::$rpcId)) {
+            $rpc = 'rpc';
+        }
+        return X::$rpc($package);
     }
 
     /**
@@ -49,14 +61,10 @@ abstract class RPCWrapper extends Component {
      * @param array  $arguments
      *
      * @return mixed
-     * @throws \x2ts\rpc\RPCException
+     * @throws \x2ts\ComponentNotFoundException
      */
     public function __call($name, $arguments) {
-        Toolkit::trace("Package: {$this->package}");
-        $rpc = $this->findRpcComponentId();
-        if ($rpc === false) {
-            throw new RPCException('The rpc component cannot be found in the component configuration');
-        }
-        return X::$rpc($this->package)->call($name, ...$arguments);
+        X::logger()->trace("Package: {$this->package}");
+        return static::rpc($this->package)->call($name, ...$arguments);
     }
 }
