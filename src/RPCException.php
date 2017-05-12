@@ -31,14 +31,14 @@ class RPCException extends Exception {
 
     public $remoteCallStack;
 
-    public function __construct($message) {
-        if (is_array($message)) {
-            $this->remoteExceptionName = $message['name'] ?? '';
-            $this->remoteFile = $message['file'] ?? '';
-            $this->remoteLine = $message['line'] ?? 0;
-            $this->remoteCode = $message['code'] ?? 0;
-            $this->remoteMessage = $message['msg'] ?? '';
-            $this->remoteCallStack = $message['trace'] ?? '';
+    public function __construct($message = '', $remoteInfo = []) {
+        $this->remoteExceptionName = $remoteInfo['name'] ?? '';
+        $this->remoteFile = $remoteInfo['file'] ?? '';
+        $this->remoteLine = $remoteInfo['line'] ?? 0;
+        $this->remoteCode = $remoteInfo['code'] ?? 0;
+        $this->remoteMessage = $remoteInfo['msg'] ?? '';
+        $this->remoteCallStack = $remoteInfo['trace'] ?? '';
+        if (empty($message)) {
             $message = $this->remoteExceptionName . ' thrown in remote file "' . $this->remoteFile
                 . '" (line: ' . $this->remoteLine . ') with code ' . $this->remoteCode .
                 ' message: ' . $this->remoteMessage . "\n\nRemote Call stack:\n"
