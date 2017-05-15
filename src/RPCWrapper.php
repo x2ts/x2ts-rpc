@@ -30,6 +30,11 @@ abstract class RPCWrapper extends Component {
         }
     }
 
+    public function profile() {
+        self::rpc($this->package)->profile();
+        return $this;
+    }
+
     protected static $rpcId = '';
 
     /**
