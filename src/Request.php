@@ -26,12 +26,22 @@ class Request {
 
     private $void;
 
-    public function __construct(AMQPChannel $channel, string $package, string $name, array $args, bool $void = false) {
+    private $profileEnabled;
+
+    public function __construct(
+        AMQPChannel $channel,
+        string $package,
+        string $name,
+        array $args,
+        bool $void = false,
+        bool $profileEnabled = false
+    ) {
         $this->channel = $channel;
         $this->package = $package;
         $this->name = $name;
         $this->args = $args;
         $this->void = $void;
+        $this->profileEnabled = $profileEnabled;
         $this->id = uniqid('', false);
     }
 
@@ -39,10 +49,11 @@ class Request {
         $ex = new AMQPExchange($this->channel);
         $payload = msgpack_pack(
             [
-                'id'   => $this->id,
-                'name' => $this->name,
-                'args' => $this->args,
-                'void' => $this->void,
+                'id'             => $this->id,
+                'name'           => $this->name,
+                'args'           => $this->args,
+                'void'           => $this->void,
+                'profileEnabled' => $this->profileEnabled,
             ]
         );
         if ($this->void) {

@@ -76,6 +76,13 @@ class RPC extends Component {
         return $this;
     }
 
+    private $profile = false;
+
+    public function profile() {
+        $this->profile = true;
+        return $this;
+    }
+
     public function call(string $name, ...$args) {
         X::bus()->dispatch(new BeforeCall([
             'dispatcher' => $this,
@@ -85,7 +92,16 @@ class RPC extends Component {
             'args'       => $args,
         ]));
         $this->checkPackage();
-        return (new Request($this->clientChannel, $this->package, $name, $args))->send()->getResponse();
+        $profile = $this->profile;
+        $this->profile = false;
+        return (new Request(
+            $this->clientChannel,
+            $this->package,
+            $name,
+            $args,
+            false,
+            $profile
+        ))->send()->getResponse();
     }
 
     private function checkPackage() {
@@ -100,6 +116,13 @@ class RPC extends Component {
     }
 
     public function callVoid(string $name, ...$args) {
+        X::bus()->dispatch(new BeforeCall([
+            'dispatcher' => $this,
+            'void'       => false,
+            'package'    => $this->package,
+            'func'       => $name,
+            'args'       => $args,
+        ]));
         $this->checkPackage();
         (new Request($this->clientChannel, $this->package, $name, $args, true))->send();
         X::bus()->dispatch(new AfterCall([
@@ -112,6 +135,7 @@ class RPC extends Component {
             'error'      => null,
             'exception'  => null,
         ]));
+        $this->profile = false;
     }
 
     public function asyncCall(string $name, ...$args): Response {
@@ -175,17 +199,18 @@ class RPC extends Component {
             Toolkit::log($payload['exception']['args'][0], X_LOG_WARNING);
             goto reply;
         }
-        Toolkit::trace($callInfo);
+        X::logger()->trace($callInfo);
 
         try {
             if (array_key_exists($callInfo['name'], $this->callbacks)) {
                 error_clear_last();
                 X::bus()->dispatch(new BeforeInvoke([
-                    'dispatcher' => $this,
-                    'void'       => (bool) $callInfo['void'],
-                    'package'    => $this->package,
-                    'func'       => $callInfo['name'],
-                    'args'       => $callInfo['args'],
+                    'dispatcher'     => $this,
+                    'void'           => (bool) $callInfo['void'],
+                    'package'        => $this->package,
+                    'func'           => $callInfo['name'],
+                    'args'           => $callInfo['args'],
+                    'profileEnabled' => $callInfo['profileEnabled'] ?? false,
                 ]));
                 $r = call_user_func_array($this->callbacks[$callInfo['name']], $callInfo['args']);
                 $payload = [
