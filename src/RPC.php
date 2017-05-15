@@ -219,13 +219,14 @@ class RPC extends Component {
                     'result'    => $r,
                 ];
                 X::bus()->dispatch(new AfterInvoke([
-                    'dispatcher' => $this,
-                    'void'       => (bool) $callInfo['void'],
-                    'package'    => $this->package,
-                    'func'       => $callInfo['name'],
-                    'args'       => $callInfo['args'],
-                    'error'      => $payload['error'],
-                    'result'     => $r,
+                    'dispatcher'     => $this,
+                    'void'           => (bool) $callInfo['void'],
+                    'package'        => $this->package,
+                    'func'           => $callInfo['name'],
+                    'profileEnabled' => $callInfo['profileEnabled'] ?? false,
+                    'args'           => $callInfo['args'],
+                    'error'          => $payload['error'],
+                    'result'         => $r,
                 ]));
                 if ($callInfo['void']) {
                     goto finish;
@@ -258,12 +259,13 @@ class RPC extends Component {
                 'result'    => null,
             ];
             X::bus()->dispatch(new AfterInvoke([
-                'dispatcher' => $this,
-                'void'       => $callInfo['void'],
-                'package'    => $this->package,
-                'func'       => $callInfo['name'],
-                'error'      => $payload['error'],
-                'exception'  => $e,
+                'dispatcher'     => $this,
+                'void'           => $callInfo['void'],
+                'package'        => $this->package,
+                'func'           => $callInfo['name'],
+                'profileEnabled' => $callInfo['profileEnabled'] ?? false,
+                'error'          => $payload['error'],
+                'exception'      => $e,
             ]));
 
             X::logger()->trace(function () use ($e) {
