@@ -65,6 +65,7 @@ class Response {
                 ]));
             }
             $q->ack($msg->getDeliveryTag());
+            $q->delete();
             return false;
         });
         if ($throw instanceof Throwable) {
