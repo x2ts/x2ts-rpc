@@ -420,4 +420,3 @@ class RPC extends Component {
         return $this->_clientChannel;
     }
 }
-

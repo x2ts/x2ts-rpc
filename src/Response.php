@@ -23,6 +23,9 @@ class Response {
     private $callInfo;
 
     public function __construct(string $id, AMQPQueue $q, $callInfo) {
+        if ($callInfo['void']) {
+            $q->delete();
+        }
         $this->id = $id;
         $this->q = $q;
         $this->callInfo = $callInfo;

@@ -70,6 +70,7 @@ class Request {
                 'reply_to'       => $replyQueue->getName(),
             ]
         );
+        $ex->delete();
         return new Response($this->id, $replyQueue, [
             'name' => $this->name,
             'args' => $this->args,
