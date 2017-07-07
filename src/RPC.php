@@ -16,7 +16,7 @@ use AMQPQueue;
 use AMQPQueueException;
 use Throwable;
 use x2ts\{
-    Component, ComponentFactory as X, db\DataBaseException, ExtensionNotLoadedException
+    Component, ComponentFactory as X, ExtensionNotLoadedException
 };
 use x2ts\rpc\event\{
     AfterCall, AfterInvoke, BeforeCall, BeforeInvoke
@@ -243,11 +243,6 @@ class RPC extends Component {
                 Toolkit::log($payload['exception']['args'][0], X_LOG_WARNING);
             }
         } catch (Throwable $e) {
-            if ($e instanceof DataBaseException) {
-                if ($e->getDb()->getPdo()->inTransaction()) {
-                    $e->getDb()->rollback();
-                }
-            }
             $payload = [
                 'error'     => error_get_last(),
                 'exception' => [

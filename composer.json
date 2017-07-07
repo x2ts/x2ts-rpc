@@ -3,7 +3,7 @@
   "description": "The RPC module",
   "type": "library",
   "require": {
-    "x2ts/x2ts": "^2.2.0",
+    "x2ts/x2ts": "^2.2.1",
     "ext-amqp": ">=1.7.0",
     "ext-msgpack": ">=2.0.0"
   },

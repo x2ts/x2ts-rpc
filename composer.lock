@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "content-hash": "7aad277fefb9480e2d22d8db681c7c08",
+    "content-hash": "57077dd73d2dfa7a9f122c71b63c12c4",
     "packages": [
         {
             "name": "monolog/monolog",
@@ -133,16 +133,16 @@
         },
         {
             "name": "x2ts/x2ts",
-            "version": "v2.2.0",
+            "version": "v2.2.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/x2ts/x2ts.git",
-                "reference": "d53077b489d068bc271e1931f105d2b129f1ac53"
+                "reference": "97f3253648c8a52aefafb93e555078173e60dd99"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://files.phpcomposer.com/files/x2ts/x2ts/d53077b489d068bc271e1931f105d2b129f1ac53.zip",
-                "reference": "d53077b489d068bc271e1931f105d2b129f1ac53",
+                "url": "https://files.phpcomposer.com/files/x2ts/x2ts/97f3253648c8a52aefafb93e555078173e60dd99.zip",
+                "reference": "97f3253648c8a52aefafb93e555078173e60dd99",
                 "shasum": ""
             },
             "require": {
@@ -186,7 +186,7 @@
                 }
             ],
             "description": "The core of x2ts framework.",
-            "time": "2017-07-07T03:50:02+00:00"
+            "time": "2017-07-07T04:33:46+00:00"
         }
     ],
     "packages-dev": [
