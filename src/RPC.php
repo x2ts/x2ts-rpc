@@ -244,9 +244,8 @@ class RPC extends Component {
             }
         } catch (Throwable $e) {
             if ($e instanceof DataBaseException) {
-                $db = $e->getDb();
-                if ($db->getPdo()->inTransaction()) {
-                    $db->rollback();
+                if ($e->getDb()->getPdo()->inTransaction()) {
+                    $e->getDb()->rollback();
                 }
             }
             $payload = [
