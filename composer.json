@@ -15,6 +15,9 @@
     "psr-4": {
       "x2ts\\rpc\\": [
         "src"
+      ],
+      "x2ts\\rpc\\tests\\": [
+        "tests"
       ]
     }
   },

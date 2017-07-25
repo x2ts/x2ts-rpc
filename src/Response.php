@@ -8,69 +8,168 @@
 
 namespace x2ts\rpc;
 
+use x2ts\Toolkit;
 
-use AMQPEnvelope;
-use AMQPQueue;
-use Throwable;
-use x2ts\ComponentFactory as X;
-use x2ts\rpc\event\AfterCall;
+class Response extends Message {
+    /**
+     * @var string
+     */
+    public $package;
 
-class Response {
-    private $id;
+    /**
+     * @var string
+     */
+    public $id;
 
-    private $q;
+    /**
+     * @var Request
+     */
+    public $request;
 
-    private $callInfo;
+    /**
+     * @var mixed
+     */
+    public $result;
 
-    public function __construct(string $id, AMQPQueue $q, $callInfo) {
-        if ($callInfo['void']) {
-            $q->delete();
-        }
-        $this->id = $id;
-        $this->q = $q;
-        $this->callInfo = $callInfo;
+    /**
+     * @var array
+     */
+    public $error;
+
+    /**
+     * @var RPCException|RemoteException
+     */
+    public $exception;
+
+    /**
+     * @var int
+     */
+    public $version = 3;
+
+    /**
+     * @var array
+     */
+    public $options = [
+        'compressor' => self::C_NO_COMPRESS,
+        'packer'     => self::P_SWOOLE,
+    ];
+
+    public function __construct(
+        string $package,
+        array $response = [
+            'id'        => null,
+            'error'     => null,
+            'result'    => null,
+            'exception' => null,
+            'request'   => null,
+        ],
+        $options = [
+            'compressor' => self::C_NO_COMPRESS,
+            'packer'     => self::P_MSGPACK,
+        ]
+    ) {
+        $this->package = $package;
+        $this->id = $response['id'] ?? null;
+        $this->error = $response['error'] ?? null;
+        $this->result = $response['result'] ?? null;
+        $this->exception = $response['exception'] ?? null;
+        $this->request = $response['request'] ?? null;
+        Toolkit::override($this->options, $options);
     }
 
-    public function getResponse() {
-        $result = null;
-        $throw = null;
-        $this->q->consume(function (AMQPEnvelope $msg, AMQPQueue $q) use (&$result, &$throw) {
-            if ($msg->getCorrelationId() === $this->id) {
-                error_clear_last();
-                $returnInfo = msgpack_unpack($msg->getBody());
-                $error = error_get_last();
-                if (!empty($error)) {
-                    $throw = new PacketFormatException(
-                        'Response packet format error: ' . $error['message'] .
-                        ' in file ' . $error['file'] . ' (line: ' . $error['line'] . ')',
-                        PacketFormatException::RESPONSE
-                    );
-                } else {
-                    if (isset($returnInfo['exception']['class'])) {
-                        $class = __NAMESPACE__ . '\\' . $returnInfo['exception']['class'];
-                        $args = $returnInfo['exception']['args'];
-                        $throw = new $class(...$args);
-                    }
-                    $result = $returnInfo['result'];
-                }
-                X::bus()->dispatch(new AfterCall([
-                    'dispatcher' => $this,
-                    'package'    => null,
-                    'func'       => $this->callInfo['name'],
-                    'args'       => $this->callInfo['args'],
-                    'void'       => false,
-                    'result'     => $result,
-                    'error'      => $returnInfo['error'],
-                    'exception'  => $throw,
-                ]));
+    public static function parse(string $data, string $package) {
+        $firstByte = unpack('Cfb', $data)['fb'];
+        if (0x80 === ($firstByte & 0xf0)) {
+            $r = msgpack_unpack($data);
+            $res = new Response($package, [
+                'id'     => $r['id'],
+                'error'  => $r['error'],
+                'result' => $r['result'],
+            ]);
+            if (null !== $r['exception']) {
+                $exClass = class_exists($r['exception']['class']) ?
+                    $r['exception']['class'] : (__NAMESPACE__ . '\\' . $r['exception']['class']);
+                $res->exception = new $exClass(...$r['exception']['args']);
             }
-            $q->ack($msg->getDeliveryTag());
-            $q->delete();
-            return false;
-        });
-        if ($throw instanceof Throwable) {
-            throw $throw;
+            $res->version = 2;
+            return $res;
         }
-        return $result;
+
+        if (0x33 === $firstByte) {
+            $r = self::unpack(
+                self::decompress(
+                    substr($data, 1),
+                    $compressor
+                ),
+                $packer
+            );
+            $res = new Response($package, [
+                'id'        => $r['id'],
+                'error'     => $r['error'],
+                'result'    => $r['result'],
+                'exception' => null,
+            ]);
+            $res->version = 3;
+            if ($r['exception'] instanceof RemoteException) {
+                $res->exception = $r['exception'];
+            } elseif (is_array($r['exception'])) {
+                $exClass = class_exists($r['exception']['class']) ?
+                    $r['exception']['class'] :
+                    __NAMESPACE__ . '\\' . $r['exception']['class'];
+                $res->exception = new $exClass(...$r['exception']['args']);
+            }
+
+            return $res;
+        }
+
+        throw new PacketFormatException('Unsupported response format, cannot parse');
+    }
+
+    public function stringify(int $version = 3): string {
+        if ($version === 2) {
+            $e = $this->exception;
+            return msgpack_pack([
+                'id'        => $this->id,
+                'result'    => $this->result,
+                'error'     => $this->error,
+                'exception' => $e instanceof \Throwable ? [
+                    'class' => 'RPCException',
+                    'args'  => ['', [
+                        'name'  => get_class($e),
+                        'file'  => $e->getFile(),
+                        'line'  => $e->getLine(),
+                        'code'  => $e->getCode(),
+                        'msg'   => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]],
+                ] : null,
+            ]);
+        }
+
+        if ($version === 3) {
+            $e = $this->exception;
+            $data = [
+                'id'        => $this->id,
+                'result'    => $this->result,
+                'error'     => $this->error,
+                'exception' => $e instanceof RemoteException ? $e : [
+                    'class' => RPCException::class,
+                    'args'  => ['', [
+                        'name'  => get_class($e),
+                        'file'  => $e->getFile(),
+                        'line'  => $e->getLine(),
+                        'code'  => $e->getCode(),
+                        'msg'   => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]],
+                ],
+            ];
+            return '3' . self::compress(
+                    self::pack($data, $this->options['packer']),
+                    $this->options['compressor']
+                );
+        }
+
+        throw new PacketFormatException('Unsupported protocol version');
     }
 }

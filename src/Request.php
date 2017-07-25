@@ -8,72 +8,129 @@
 
 namespace x2ts\rpc;
 
+use x2ts\Toolkit;
 
-use AMQPChannel;
-use AMQPExchange;
-use AMQPQueue;
+class Request extends Message {
+    /**
+     * @var string
+     */
+    public $id;
 
-class Request {
-    private $id;
+    /**
+     * @var string
+     */
+    public $func;
 
-    private $name;
+    /**
+     * @var array
+     */
+    public $args;
 
-    private $args;
+    /**
+     * @var bool
+     */
+    public $void;
 
-    private $channel;
+    /**
+     * @var array
+     */
+    public $meta;
 
-    private $package;
+    /**
+     * @var int
+     */
+    public $version;
 
-    private $void;
+    /**
+     * @var string
+     */
+    public $package;
 
-    private $profileEnabled;
+    /**
+     * @var array
+     */
+    public $options = [
+        'compressor' => 'n',
+        'packer'     => 'm',
+    ];
 
     public function __construct(
-        AMQPChannel $channel,
         string $package,
-        string $name,
-        array $args,
-        bool $void = false,
-        bool $profileEnabled = false
+        array $req = [
+            'func' => '',
+            'args' => [],
+            'void' => false,
+            'meta' => [],
+        ],
+        array $options = [
+            'compressor' => self::C_NO_COMPRESS,
+            'packer'     => self::P_MSGPACK,
+        ]
     ) {
-        $this->channel = $channel;
+        $this->func = $req['func'];
+        $this->args = $req['args'] ?? [];
+        $this->void = $req['void'] ?? false;
+        $this->meta = $req['meta'] ?? [];
+        Toolkit::override($this->options, $options);
+        $this->id = $req['id'] ?? uniqid('', false);
         $this->package = $package;
-        $this->name = $name;
-        $this->args = $args;
-        $this->void = $void;
-        $this->profileEnabled = $profileEnabled;
-        $this->id = uniqid('', false);
+        $this->version = 3;
     }
 
-    public function send() {
-        $ex = new AMQPExchange($this->channel);
-        $payload = msgpack_pack(
-            [
-                'id'             => $this->id,
-                'name'           => $this->name,
-                'args'           => $this->args,
-                'void'           => $this->void,
-                'profileEnabled' => $this->profileEnabled,
-            ]
-        );
-        if ($this->void) {
-            $ex->publish($payload, $this->package);
-            return null;
+    public static function parse(string $data, string $package) {
+        $firstByte = unpack('Cfb', $data)['fb'];
+        if (0x80 === (0xf0 & $firstByte)) {// x2ts-rpc 2.x proto
+            $r = msgpack_unpack($data);
+            $request = new Request($package);
+            $request->id = $r['id'];
+            $request->func = $r['name'];
+            $request->args = $r['args'];
+            $request->void = $r['void'];
+            if (isset($r['profileEnabled'])) {
+                $request->meta = ['profile' => $r['profileEnabled']];
+            }
+            $request->version = 2;
+            return $request;
         }
 
-        $replyQueue = new AMQPQueue($this->channel);
-        $replyQueue->setFlags(AMQP_EXCLUSIVE);
-        $replyQueue->declareQueue();
-        $ex->publish(
-            $payload, $this->package, AMQP_NOPARAM, [
-                'correlation_id' => $this->id,
-                'reply_to'       => $replyQueue->getName(),
-            ]
-        );
-        return new Response($this->id, $replyQueue, [
-            'name' => $this->name,
-            'args' => $this->args,
-            'void' => $this->void,
-        ]);
+        if ($firstByte === 0x33) { // x2ts-rpc 3.x proto
+            $compressed = substr($data, 1);
+            $packed = self::decompress($compressed, $compressor);
+            $r = self::unpack($packed, $packer);
+            $request = new Request($package, $r, [
+                'compressor' => $compressor,
+                'packer'     => $packer,
+            ]);
+            return $request;
+        }
+
+        throw new PacketFormatException('Unsupported protocol version, cannot parse');
+    }
+
+    public function stringify(int $version = 3): string {
+        if ($version === 3) {
+            return $version . self::compress(
+                    self::pack([
+                        'id'   => $this->id,
+                        'func' => $this->func,
+                        'args' => $this->args,
+                        'void' => $this->void,
+                        'meta' => $this->meta,
+                    ], $this->options['packer']),
+                    $this->options['compressor']
+                );
+        }
+
+        if ($version === 2) {
+            return msgpack_pack([
+                'id'             => $this->id,
+                'name'           => $this->func,
+                'args'           => $this->args,
+                'void'           => $this->void,
+                'profileEnabled' => $this->meta['profile'] ?? false,
+            ]);
+        }
+
+        throw new PacketFormatException('Unsupported protocol version');
     }
 }
