@@ -11,6 +11,6 @@ before_script:
  - cd amqp-1.9.1/ && phpize && ./configure && make && make install && cd -
  - pecl install msgpack
  - pecl install swoole
- - pecl install lzf
+ - yes '' | pecl install lzf
  - phpenv config-add travis-php-ext.ini
  - composer install -o --ignore-platform-reqs
