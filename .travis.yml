@@ -5,6 +5,5 @@ php:
 before_script:
  - pecl install msgpack
  - pecl install swoole
- - pecl install amqp
  - phpenv config-add travis-php-ext.ini
- - composer install
+ - composer install -o --ignore-platform-reqs
