@@ -147,12 +147,12 @@ class Response extends Message {
         }
 
         if ($version === 3) {
-            $e = $this->exception;
-            $data = [
-                'id'        => $this->id,
-                'result'    => $this->result,
-                'error'     => $this->error,
-                'exception' => $e instanceof RemoteException ? $e : [
+            $ex = null;
+            if ($this->exception instanceof RemoteException || is_array($this->exception)) {
+                $ex = $this->exception;
+            } elseif ($this->exception instanceof \Throwable) {
+                $e = $this->exception;
+                $ex = [
                     'class' => RPCException::class,
                     'args'  => ['', [
                         'name'  => get_class($e),
@@ -162,7 +162,13 @@ class Response extends Message {
                         'msg'   => $e->getMessage(),
                         'trace' => $e->getTraceAsString(),
                     ]],
-                ],
+                ];
+            }
+            $data = [
+                'id'        => $this->id,
+                'result'    => $this->result,
+                'error'     => $this->error,
+                'exception' => $ex,
             ];
             return '3' . self::compress(
                     self::pack($data, $this->options['packer']),

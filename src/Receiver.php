@@ -10,5 +10,9 @@ namespace x2ts\rpc;
 
 
 abstract class Receiver {
-    abstract public function getResponse(): Response;
+    /**
+     * @return mixed
+     * @throws \Throwable
+     */
+    abstract public function fetchReply();
 }

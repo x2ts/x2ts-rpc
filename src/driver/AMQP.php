@@ -35,19 +35,33 @@ class AMQP extends Driver {
         'read_timeout'    => 30,
         'write_timeout'   => 30,
         'connect_timeout' => 30,
+        'persistent'      => false,
+        'maxRequest'      => 500,
     ];
 
-    protected $requestCounter = 0;
+    /**
+     * @var int
+     */
+    protected $requestCounter;
 
     /**
      * @var IRequestHandler
      */
     private $requestHandler;
 
+    /**
+     * @var AMQPChannel
+     */
     protected $_serverChannel;
 
+    /**
+     * @var AMQPChannel
+     */
     protected $_clientChannel;
 
+    /**
+     * @var AMQPExchange
+     */
     private $_serverExchange;
 
     /**
@@ -69,6 +83,7 @@ class AMQP extends Driver {
         if (!extension_loaded('amqp')) {
             throw new ExtensionNotLoadedException('The amqp extension required by the AMQP rpc driver has not been loaded yet');
         }
+        $this->requestCounter = 0;
         Toolkit::override($this->conf, $conf);
     }
 
@@ -111,7 +126,7 @@ class AMQP extends Driver {
     }
 
     public function listen() {
-        Toolkit::trace('listen start');
+        X::logger()->notice('listen start');
         $this->queue = $queue = new AMQPQueue($this->getServerChannel());
         $queue->setName($this->queueName());
         $queue->setFlags(AMQP_DURABLE);
@@ -169,7 +184,7 @@ class AMQP extends Driver {
         });
     }
 
-    private function _onRequest(AMQPEnvelope $msg, AMQPQueue $q) {
+    public function _onRequest(AMQPEnvelope $msg, AMQPQueue $q) {
         $this->amqpMessage = $msg;
         error_clear_last();
         $req = Request::parse($msg->getBody(), $this->package);
@@ -178,6 +193,7 @@ class AMQP extends Driver {
         if (empty($res->request)) {
             $res->request = $req;
         }
+        X::logger()->trace($res);
         if (!$req->void) {
             $this->reply($res);
         }
@@ -223,7 +239,7 @@ class AMQP extends Driver {
     private function getClientChannel() {
         if (!$this->_clientChannel instanceof AMQPChannel) {
             $this->_clientChannel = new AMQPChannel($this->getConnection(
-                $this->conf['connection'],
+                $this->conf,
                 $this->conf['persistent']
             ));
             $this->_clientChannel->setPrefetchCount(1);
@@ -233,7 +249,7 @@ class AMQP extends Driver {
 
     private function getServerChannel() {
         if (!$this->_serverChannel instanceof AMQPChannel) {
-            $conf = $this->conf['connection'];
+            $conf = $this->conf;
             $conf['read_timeout'] = 0;
 
             $this->_serverChannel = new AMQPChannel($this->getConnection(
