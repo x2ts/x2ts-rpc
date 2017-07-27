@@ -8,12 +8,8 @@
 
 namespace x2ts\rpc;
 
-use AMQPChannel;
-use AMQPConnection;
 use AMQPEnvelope;
-use AMQPExchange;
 use AMQPQueue;
-use AMQPQueueException;
 use Throwable;
 use x2ts\{
     Component, ComponentFactory as X, ExtensionNotLoadedException
@@ -29,8 +25,7 @@ use x2ts\Toolkit;
  *
  * @package x2ts\rpc
  *
- * @property-read AMQPChannel $serverChannel
- * @property-read AMQPChannel $clientChannel
+ * @property-read Driver $driver
  */
 class RPC extends Component {
     protected static $_conf = [
@@ -48,22 +43,11 @@ class RPC extends Component {
         'maxRequest' => 500,
     ];
 
-    protected $requestCounter = 0;
-
-    private $_serverChannel;
-
-    private $_clientChannel;
-
-    private $_serverExchange;
-
     private $package;
 
     private $callbacks;
 
     public function __construct(string $package = 'common') {
-        if (!extension_loaded('amqp')) {
-            throw new ExtensionNotLoadedException('The x2ts\rpc\RPC required extension amqp has not been loaded yet');
-        }
         if (!extension_loaded('msgpack')) {
             throw new ExtensionNotLoadedException('The x2ts\rpc\RPC required extension msgpack has not been loaded yet');
         }
@@ -104,17 +88,6 @@ class RPC extends Component {
         ))->send()->getResponse();
     }
 
-    private function checkPackage() {
-        try {
-            $q = new AMQPQueue($this->clientChannel);
-            $q->setFlags(AMQP_DURABLE | AMQP_PASSIVE);
-            $q->setName($this->package);
-            $q->declareQueue();
-        } catch (AMQPQueueException $ex) {
-            throw new PackageNotFoundException();
-        }
-    }
-
     public function callVoid(string $name, ...$args) {
         X::bus()->dispatch(new BeforeCall([
             'dispatcher' => $this,
@@ -151,23 +124,95 @@ class RPC extends Component {
     }
 
     /**
-     * @param string|IRemoteCallable $name
-     * @param callable|null          $method
+     * @param IRemoteCallable $obj
      *
-     * @return RPC
+     * @return $this
      */
-    public function register($name, callable $method = null): RPC {
-        if (is_string($name)) {
-            Toolkit::log("register $name to package {$this->package}", X_LOG_NOTICE);
-            $this->callbacks[$name] = $method ?? $name;
-        } else if ($name instanceof IRemoteCallable) {
-            $obj = $name;
-            foreach ($obj->getRPCMethods() as $methodName) {
-                Toolkit::log("register $methodName to package {$this->package}", X_LOG_NOTICE);
-                $this->callbacks[$methodName] = [$obj, $methodName];
-            }
+    public function register(IRemoteCallable $obj) {
+        foreach ($obj->getRPCMethods() as $methodName) {
+            X::logger()->notice("register $methodName to package {$this->package}");
+            $this->callbacks[$methodName] = [$obj, $methodName];
         }
         return $this;
+    }
+
+    public function handleRequest(Request $req): Response {
+        X::logger()->trace($req);
+        try {
+            if (array_key_exists($req->func, $this->callbacks)) {
+                error_clear_last();
+                X::bus()->dispatch(new BeforeInvoke([
+                    'dispatcher' => $this,
+                    'package'    => $req->package,
+                    'void'       => $req->void,
+                    'args'       => $req->args,
+                    'meta'       => $req->meta,
+                ]));
+                /** @var IRemoteCallable $obj */
+                $obj = $this->callbacks[$req->func][0];
+                $obj->setRPCContext($req);
+                $r = call_user_func_array($this->callbacks[$req->func], $req->args);
+                $res = new Response($this->package, [
+                    'id'        => $req->id,
+                    'error'     => error_get_last(),
+                    'result'    => $r,
+                    'exception' => null,
+                    'request'   => $req,
+                ], $req->options);
+
+                X::bus()->dispatch(new AfterInvoke([
+                    'dispatcher' => $this,
+                    'void'       => $req->void,
+                    'package'    => $req->package,
+                    'func'       => $req->func,
+                    'meta'       => $req->meta,
+                    'args'       => $req->args,
+                    'error'      => $res->error,
+                    'result'     => $res->result,
+                ]));
+                if ($req->void) {
+                    goto finish;
+                }
+            } else {
+                $res = new Response($this->package, [
+                    'id'        => $req->id,
+                    'error'     => 'Specified RPC function not exist',
+                    'exception' => [
+                        'class' => UnregisteredFunctionException::class,
+                        'args'  => ["Specified RPC function {$this->package}.{$req->func} is unregistered."],
+                    ],
+                    'request'   => $req,
+                ], $req->options);
+                X::logger()->warn($res->exception->args[0]);
+            }
+        } catch (Throwable $e) {
+            $res = new Response($this->package, [
+                'id'        => $req->id,
+                'error'     => error_get_last(),
+                'exception' => $e,
+                'request'   => $req,
+            ], $req->options);
+            X::bus()->dispatch(new AfterInvoke([
+                'dispatcher' => $this,
+                'void'       => $req->void,
+                'package'    => $req->package,
+                'func'       => $req->func,
+                'args'       => $req->args,
+                'meta'       => $req->meta,
+                'result'     => $res->result,
+                'error'      => $res->error,
+                'exception'  => $res->exception,
+            ]));
+
+            X::logger()->trace(function () use ($e) {
+                return get_class($e) . ' thrown in remote file "' . $e->getFile()
+                    . '" (line: ' . $e->getLine() . ') with code ' . $e->getCode() .
+                    ' message: ' . $e->getMessage() . "\n\nRemote Call stack:\n"
+                    . $e->getTraceAsString();
+            });
+        }
+        finish:
+        return $res;
     }
 
     /**
@@ -182,13 +227,14 @@ class RPC extends Component {
     public function _onRequest(AMQPEnvelope $msg, AMQPQueue $q) {
         $GLOBALS['_rpc_server_shutdown'] = [$this->getServerExchange(), $msg, $q];
         error_clear_last();
-        $callInfo = msgpack_unpack($msg->getBody());
+        $req = Request::parse($msg->getBody(), $this->package);
+
         $error = error_get_last();
         if (!empty($error)) {
             $payload = [
                 'error'     => $error,
                 'exception' => [
-                    'class'  => 'PacketFormatException',
+                    'class'  => PacketFormatException::class,
                     'args'   => [
                         'Request packet format error: ' . $error['message'],
                         PacketFormatException::REQUEST,
@@ -196,77 +242,73 @@ class RPC extends Component {
                     'result' => null,
                 ],
             ];
-            Toolkit::log($payload['exception']['args'][0], X_LOG_WARNING);
+            X::logger()->warn($payload['exception']['args'][0]);
             goto reply;
         }
-        X::logger()->trace($callInfo);
+        X::logger()->trace($req);
 
         try {
-            if (array_key_exists($callInfo['name'], $this->callbacks)) {
+            if (array_key_exists($req['func'], $this->callbacks)) {
                 error_clear_last();
-                X::bus()->dispatch(new BeforeInvoke([
-                    'dispatcher'     => $this,
-                    'void'           => (bool) $callInfo['void'],
-                    'package'        => $this->package,
-                    'func'           => $callInfo['name'],
-                    'args'           => $callInfo['args'],
-                    'profileEnabled' => $callInfo['profileEnabled'] ?? false,
-                ]));
-                $r = call_user_func_array($this->callbacks[$callInfo['name']], $callInfo['args']);
+                X::bus()->dispatch(new BeforeInvoke(array_merge([
+                    'dispatcher' => $this,
+                ], $req)));
+                /** @var IRemoteCallable $obj */
+                $obj = $this->callbacks[$req['func']][0];
+                $obj->setRPCContext($req);
+                $r = call_user_func_array($this->callbacks[$req['func']], $req['args']);
                 $payload = [
                     'error'     => error_get_last(),
                     'exception' => null,
                     'result'    => $r,
                 ];
-                X::bus()->dispatch(new AfterInvoke([
-                    'dispatcher'     => $this,
-                    'void'           => (bool) $callInfo['void'],
-                    'package'        => $this->package,
-                    'func'           => $callInfo['name'],
-                    'profileEnabled' => $callInfo['profileEnabled'] ?? false,
-                    'args'           => $callInfo['args'],
-                    'error'          => $payload['error'],
-                    'result'         => $r,
-                ]));
-                if ($callInfo['void']) {
+                X::bus()->dispatch(new AfterInvoke(array_merge([
+                    'dispatcher' => $this,
+                    'error'      => $payload['error'],
+                    'result'     => $r,
+                ], $req)));
+                if ($req['void']) {
                     goto finish;
                 }
             } else {
                 $payload = [
                     'error'     => 'Specified RPC function not exist',
                     'exception' => [
-                        'class' => 'UnregisteredFunctionException',
-                        'args'  => ["Specified RPC function {$this->package}.{$callInfo['name']} is unregistered."],
+                        'class' => UnregisteredFunctionException::class,
+                        'args'  => ["Specified RPC function {$this->package}.{$req['func']} is unregistered."],
                     ],
                     'result'    => null,
                 ];
-                Toolkit::log($payload['exception']['args'][0], X_LOG_WARNING);
+                X::logger()->warn($payload['exception']['args'][0]);
             }
         } catch (Throwable $e) {
-            $payload = [
-                'error'     => error_get_last(),
-                'exception' => [
-                    'class' => 'RPCException',
-                    'args'  => ['', [
-                        'name'  => get_class($e),
-                        'file'  => $e->getFile(),
-                        'line'  => $e->getLine(),
-                        'code'  => $e->getCode(),
-                        'msg'   => $e->getMessage(),
-                        'trace' => $e->getTraceAsString(),
-                    ]],
-                ],
-                'result'    => null,
-            ];
-            X::bus()->dispatch(new AfterInvoke([
-                'dispatcher'     => $this,
-                'void'           => $callInfo['void'],
-                'package'        => $this->package,
-                'func'           => $callInfo['name'],
-                'profileEnabled' => $callInfo['profileEnabled'] ?? false,
-                'error'          => $payload['error'],
-                'exception'      => $e,
-            ]));
+            if ($e instanceof RemoteException) {
+                $payload = [
+                    'error'     => error_get_last(),
+                    'exception' => $e,
+                ];
+            } else {
+                $payload = [
+                    'error'     => error_get_last(),
+                    'exception' => [
+                        'class' => 'RPCException',
+                        'args'  => ['', [
+                            'name'  => get_class($e),
+                            'file'  => $e->getFile(),
+                            'line'  => $e->getLine(),
+                            'code'  => $e->getCode(),
+                            'msg'   => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
+                        ]],
+                    ],
+                    'result'    => null,
+                ];
+            }
+            X::bus()->dispatch(new AfterInvoke(array_merge([
+                'dispatcher' => $this,
+                'error'      => $payload['error'],
+                'exception'  => $e,
+            ], $req)));
 
             X::logger()->trace(function () use ($e) {
                 return get_class($e) . ' thrown in remote file "' . $e->getFile()
@@ -299,13 +341,6 @@ class RPC extends Component {
         return true;
     }
 
-    private function getServerExchange() {
-        if (!$this->_serverExchange instanceof AMQPExchange) {
-            $this->_serverExchange = new AMQPExchange($this->serverChannel);
-        }
-        return $this->_serverExchange;
-    }
-
     public function listen() {
         Toolkit::trace('listen start');
         $queue = new AMQPQueue($this->serverChannel);
@@ -316,68 +351,6 @@ class RPC extends Component {
         $queue->consume([$this, '_onRequest']);
     }
 
-    private function register_rpc_server_shutdown_function() {
-        register_shutdown_function(function () {
-            $error = error_get_last();
-            if (empty($error)) {
-                return;
-            }
-            if ($error['type'] & (
-                    E_ALL &
-                    ~E_NOTICE &
-                    ~E_WARNING &
-                    ~E_DEPRECATED &
-                    ~E_USER_NOTICE &
-                    ~E_USER_WARNING &
-                    ~E_USER_DEPRECATED &
-                    ~E_STRICT
-                )
-            ) {
-                $payload = [
-                    'error'     => $error,
-                    'exception' => [
-                        'class' => 'RPCException',
-                        'args'  => [
-                            "An error \"{$error['message']}\" in remote file "
-                            . "\"{$error['file']}\" (line: {$error['line']}) "
-                            . 'cause the rpc worker down. Please report this '
-                            . 'issue to the rpc server administrator as soon '
-                            . 'as possible.',
-                            [
-                                'name'  => '',
-                                'file'  => $error['file'],
-                                'line'  => $error['line'],
-                                'code'  => $error['type'],
-                                'msg'   => $error['message'],
-                                'trace' => (new \Exception())->getTraceAsString(),
-                            ],
-                        ],
-                    ],
-                    'result'    => null,
-                ];
-                Toolkit::log($payload['exception']['args'][0], X_LOG_ERROR);
-
-                /**
-                 * @var AMQPExchange $e
-                 * @var AMQPEnvelope $m
-                 * @var AMQPQueue    $q
-                 */
-                list ($e, $m, $q) = $GLOBALS['_rpc_server_shutdown'];
-                if ($e instanceof AMQPExchange) {
-                    $e->publish(
-                        msgpack_pack($payload),
-                        $m->getReplyTo(),
-                        AMQP_NOPARAM,
-                        ['correlation_id' => $m->getCorrelationId()]
-                    );
-                    $q->reject($m->getDeliveryTag());
-                }
-            } else {
-                Toolkit::log($error['message'], X_LOG_NOTICE);
-            }
-        });
-    }
-
     /** @noinspection MagicMethodsValidityInspection
      * @param string $package
      */
@@ -385,38 +358,4 @@ class RPC extends Component {
         $this->setPackage($package);
     }
 
-    protected function getServerChannel() {
-        if (!$this->_serverChannel instanceof AMQPChannel) {
-            $conf = $this->conf['connection'];
-            $conf['read_timeout'] = 0;
-
-            $this->_serverChannel = new AMQPChannel($this->getConnection(
-                $conf,
-                (bool) $this->conf['persistent']
-            ));
-            $this->_serverChannel->setPrefetchCount(1);
-        }
-        return $this->_serverChannel;
-    }
-
-    private function getConnection(array $conf, bool $persistent = false): AMQPConnection {
-        $connection = new AMQPConnection($conf);
-        if ($persistent) {
-            $connection->pconnect();
-        } else {
-            $connection->connect();
-        }
-        return $connection;
-    }
-
-    protected function getClientChannel() {
-        if (!$this->_clientChannel instanceof AMQPChannel) {
-            $this->_clientChannel = new AMQPChannel($this->getConnection(
-                $this->conf['connection'],
-                $this->conf['persistent']
-            ));
-            $this->_clientChannel->setPrefetchCount(1);
-        }
-        return $this->_clientChannel;
-    }
 }

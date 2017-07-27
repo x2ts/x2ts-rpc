@@ -32,6 +32,11 @@ abstract class RpcEvent extends Event {
      */
     public $args;
 
+    /**
+     * @var array
+     */
+    public $meta;
+
     public function __construct(
         array $props = [
             'dispatcher' => null,
@@ -39,6 +44,7 @@ abstract class RpcEvent extends Event {
             'package'    => 'common',
             'func'       => '',
             'args'       => [],
+            'meta'       => [],
         ]
     ) {
         parent::__construct($props);

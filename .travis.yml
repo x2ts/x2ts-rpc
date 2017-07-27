@@ -1,0 +1,9 @@
+language: php
+php:
+  - '7.0'
+  - '7.1'
+before_script:
+ - pecl install msgpack
+ - pecl install swoole
+ - phpenv config-add travis-php-ext.ini
+ - composer install
