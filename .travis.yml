@@ -3,9 +3,9 @@ php:
   - '7.0'
   - '7.1'
 before_script:
- - wget https://github.com/rabbitmq/rabbitmq-c/archive/librabbitmq-0.1-amqp_0_8.tar.gz
- - tar xzpf librabbitmq-0.1-amqp_0_8.tar.gz
- - cd rabbitmq-c-librabbitmq-0.1-amqp_0_8/ && autoreconf -i && ac_abs_confdir=`pwd` ./configure && make && make install && ldconfig && cd -
+ - wget https://github.com/alanxz/rabbitmq-c/archive/v0.8.0.tar.gz
+ - tar xzpf v0.8.0.tar.gz
+ - cd rabbitmq-c-0.8.0/ && autoreconf -i && ./configure && make && sudo make install && cd - && sudo ldconfig
  - pecl install amqp
  - pecl install msgpack
  - pecl install swoole
