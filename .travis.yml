@@ -6,7 +6,9 @@ before_script:
  - wget https://github.com/alanxz/rabbitmq-c/archive/v0.8.0.tar.gz
  - tar xzpf v0.8.0.tar.gz
  - cd rabbitmq-c-0.8.0/ && autoreconf -i && ./configure && make && sudo make install && cd - && sudo ldconfig
- - pecl install amqp
+ - wget https://pecl.php.net/get/amqp-1.9.1.tgz
+ - tar xzpf amqp-1.9.1.tgz
+ - cd amqp-1.9.1/ && phpize && ./configure && make && make install && cd -
  - pecl install msgpack
  - pecl install swoole
  - phpenv config-add travis-php-ext.ini
