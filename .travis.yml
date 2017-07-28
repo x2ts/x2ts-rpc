@@ -19,3 +19,6 @@ before_script:
  - phpenv config-add travis-php-ext.ini
  - composer install -o --ignore-platform-reqs
  - docker logs rabbitmq
+script:
+ - phpunit
+ - docker exec rabbitmq rabbitmqctl list_queues
