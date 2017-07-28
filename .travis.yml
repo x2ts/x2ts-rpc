@@ -6,6 +6,7 @@ php:
 services:
   - docker
 before_script:
+ - docker run -d --rm -p 127.0.0.1:5672:5672 --hostname rabbitmq --name rabbitmq rabbitmq:3-alpine
  - wget https://github.com/alanxz/rabbitmq-c/archive/v0.8.0.tar.gz
  - tar xzpf v0.8.0.tar.gz
  - cd rabbitmq-c-0.8.0/ && autoreconf -i && ./configure && make && sudo make install && cd - && sudo ldconfig
@@ -17,4 +18,4 @@ before_script:
  - yes '' | pecl install lzf
  - phpenv config-add travis-php-ext.ini
  - composer install -o --ignore-platform-reqs
- - docker run -d --rm -p 127.0.0.1:5672:5672 --hostname rabbitmq --name rabbitmq rabbitmq:3-alpine
+ - docker logs rabbitmq
