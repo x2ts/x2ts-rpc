@@ -20,5 +20,5 @@ before_script:
  - composer install -o --ignore-platform-reqs
  - docker logs rabbitmq
 script:
- - phpunit
+ - phpunit -c phpunit.xml
  - docker exec rabbitmq rabbitmqctl list_queues

@@ -31,6 +31,7 @@ class RPCTest extends TestCase {
             ['file', '/dev/null', 'w'],
             ['file', '/dev/null', 'w'],
         ], self::$pipes, __DIR__);
+        sleep(1);
     }
 
     public static function tearDownAfterClass() {
