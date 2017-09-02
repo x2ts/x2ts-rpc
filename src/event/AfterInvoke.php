@@ -29,21 +29,17 @@ class AfterInvoke extends RpcEvent {
      */
     public $exception;
 
-    /**
-     * @var bool
-     */
-    public $profileEnabled;
-
     public function __construct(
         array $props = [
-            'dispatcher'     => null,
-            'void'           => false,
-            'package'        => 'common',
-            'func'           => '',
-            'profileEnabled' => false,
-            'result'         => null,
-            'error'          => null,
-            'exception'      => null,
+            'dispatcher' => null,
+            'void'       => false,
+            'package'    => 'common',
+            'func'       => '',
+            'args'       => [],
+            'meta'       => [],
+            'result'     => null,
+            'error'      => null,
+            'exception'  => null,
         ]
     ) {
         parent::__construct($props);

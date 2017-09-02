@@ -14,4 +14,11 @@ interface IRemoteCallable {
      * @return array|\Traversable
      */
     public function getRPCMethods();
+
+    /**
+     * @param Request $context
+     *
+     * @return void
+     */
+    public function setRPCContext(Request $context);
 }

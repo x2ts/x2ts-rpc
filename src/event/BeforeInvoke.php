@@ -14,16 +14,14 @@ class BeforeInvoke extends RpcEvent {
         return 'x2ts.rpc.BeforeInvoke';
     }
 
-    public $profileEnabled;
-
     public function __construct(
         array $props = [
-            'dispatcher'     => null,
-            'void'           => false,
-            'package'        => 'common',
-            'func'           => '',
-            'args'           => [],
-            'profileEnabled' => false,
+            'dispatcher' => null,
+            'package'    => 'common',
+            'void'       => false,
+            'func'       => '',
+            'args'       => [],
+            'meta'       => [],
         ]
     ) {
         parent::__construct($props);
