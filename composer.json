@@ -22,11 +22,6 @@
     }
   },
   "license": "BSD",
-  "extra": {
-    "branch-alias": {
-      "3.x-dev": "dev-v3"
-    }
-  },
   "authors": [
     {
       "name": "TingSong-Syu",
