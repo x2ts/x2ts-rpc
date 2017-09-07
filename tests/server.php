@@ -28,6 +28,10 @@ class TestRPC implements \x2ts\rpc\IRemoteCallable {
     public function reverse(string $str): string {
         return implode(array_reverse(str_split($str)));
     }
+
+    public static function staticMethod() {
+        return "This should not appear";
+    }
 }
 
 $rpc = new \x2ts\rpc\RPC('test');
