@@ -16,7 +16,9 @@ trait TPublicRemoteCallable {
         $rf = new ReflectionObject($this);
         $publicMethods = $rf->getMethods(\ReflectionMethod::IS_PUBLIC);
         foreach ($publicMethods as $method) {
-            if ($method->name !== __FUNCTION__) {
+            if ($method->name !== __FUNCTION__ &&
+                $method->name !== 'setRPCContext' &&
+                !$method->isStatic()) {
                 yield $method->name;
             }
         }

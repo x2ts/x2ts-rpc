@@ -10,7 +10,6 @@ namespace x2ts\tests;
 
 use PHPUnit\Framework\TestCase;
 use x2ts\rpc\RPC;
-use x2ts\rpc\UnregisteredFunctionException;
 
 /**
  * Class RPCTest
@@ -56,6 +55,20 @@ class RPCTest extends TestCase {
      */
     public function testCallUndefinedFunction() {
         $this->getRpc()->call('undef');
+    }
+
+    /**
+     * @expectedException \x2ts\rpc\UnregisteredFunctionException
+     */
+    public function testCallSetRPCContext() {
+        $this->getRpc()->call('setRPCContext');
+    }
+
+    /**
+     * @expectedException \x2ts\rpc\UnregisteredFunctionException
+     */
+    public function testCallStaticMethod() {
+        $this->getRpc()->call('staticMethod');
     }
 
     private function getRpc() {
