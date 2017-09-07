@@ -9,7 +9,9 @@
 namespace x2ts\tests;
 
 use PHPUnit\Framework\TestCase;
+use x2ts\rpc\RemoteException;
 use x2ts\rpc\RPC;
+use x2ts\rpc\tests\RPCRemoteException;
 
 /**
  * Class RPCTest
@@ -69,6 +71,18 @@ class RPCTest extends TestCase {
      */
     public function testCallStaticMethod() {
         $this->getRpc()->call('staticMethod');
+    }
+
+    public function testThrowRemoteException() {
+        try {
+            $this->getRpc()->call('throwRemoteException');
+        } catch (RemoteException $ex) {
+            self::assertInstanceOf(RPCRemoteException::class, $ex);
+            self::assertEquals('throwException', $ex->remoteMessage);
+            self::assertEquals(333, $ex->remoteCode);
+            self::assertEquals(__DIR__ . '/server.php', $ex->remoteFile);
+            self::assertEquals(38, $ex->remoteLine);
+        }
     }
 
     private function getRpc() {

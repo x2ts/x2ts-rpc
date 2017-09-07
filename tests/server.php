@@ -8,6 +8,7 @@
 
 use x2ts\rpc\driver\AMQP;
 use x2ts\rpc\Message;
+use x2ts\rpc\tests\RPCRemoteException;
 
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -31,6 +32,10 @@ class TestRPC implements \x2ts\rpc\IRemoteCallable {
 
     public static function staticMethod() {
         return "This should not appear";
+    }
+
+    public function throwRemoteException() {
+        throw new RPCRemoteException('throwException', 333);
     }
 }
 

@@ -39,6 +39,7 @@ abstract class RemoteException extends \Exception {
         return [
             'remoteExceptionName',
             'remoteFile',
+            'remoteLine',
             'remoteCode',
             'remoteMessage',
             'remoteCallStack',
