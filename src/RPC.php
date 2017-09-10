@@ -202,6 +202,7 @@ class RPC extends Component implements IRequestHandler {
                     'dispatcher' => $this,
                     'package'    => $req->package,
                     'void'       => $req->void,
+                    'func'       => $req->func,
                     'args'       => $req->args,
                     'meta'       => $req->meta,
                 ]));
