@@ -9,7 +9,9 @@
 namespace x2ts\rpc;
 
 
-abstract class RemoteException extends \Exception {
+use x2ts\ILogString;
+
+abstract class RemoteException extends \Exception implements ILogString {
     public $remoteExceptionName;
 
     public $remoteFile;
@@ -44,5 +46,18 @@ abstract class RemoteException extends \Exception {
             'remoteMessage',
             'remoteCallStack',
         ];
+    }
+
+    public function toLogString(): string {
+        return $logMessage = sprintf(
+            "%s is thrown at remote file %s(%d) with message: %s\nRemote call stack:\n%s\n" .
+            "Local call stack:\n%s\n",
+            get_class($this),
+            $this->remoteFile,
+            $this->remoteLine,
+            $this->remoteMessage,
+            $this->remoteCallStack,
+            $this->getTraceAsString()
+        );
     }
 }
