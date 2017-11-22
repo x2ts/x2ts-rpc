@@ -59,6 +59,11 @@ class RPC extends Component implements IRequestHandler {
     private $callbacks;
 
     /**
+     * @var string
+     */
+    private $listenPackage;
+
+    /**
      * @var array
      */
     private $_meta = [];
@@ -114,70 +119,54 @@ class RPC extends Component implements IRequestHandler {
         return $this;
     }
 
-    public function call(string $func, ...$args) {
+    private function prepareCall($func, $args, $void) {
         $this->driver->checkPackage();
         X::bus()->dispatch(new BeforeCall([
             'dispatcher' => $this,
-            'void'       => false,
+            'void'       => $void,
             'package'    => $this->package,
             'func'       => $func,
             'args'       => $args,
         ]));
-        $request = new Request($this->package, [
+        $req = new Request($this->package, [
             'func' => $func,
             'args' => $args,
-            'void' => false,
+            'void' => $void,
             'meta' => $this->_meta ?? [],
         ], $this->conf['messageOpts']);
-        $result = $this->driver->send($request)->fetchReply();
         $this->resetMeta();
-        return $result;
+        return $req;
+    }
+
+    private function send(Request $request) {
+        $r = $this->driver->send($request);
+        if ($this->listenPackage) {
+            $this->setPackage($this->listenPackage);
+        }
+        return $r;
+    }
+
+    public function call(string $func, ...$args) {
+        return $this->send($this->prepareCall($func, $args, false))->fetchReply();
     }
 
     public function callVoid(string $func, ...$args) {
-        $this->driver->checkPackage();
-        X::bus()->dispatch(new BeforeCall([
-            'dispatcher' => $this,
-            'void'       => false,
-            'package'    => $this->package,
-            'func'       => $func,
-            'args'       => $args,
-        ]));
-        $this->driver->send(new Request($this->package, [
-            'func' => $func,
-            'args' => $args,
-            'void' => true,
-            'meta' => $this->_meta,
-        ], $this->conf['messageOpts']));
+        $this->send($req = $this->prepareCall($func, $args, true));
         X::bus()->dispatch(new AfterCall([
             'dispatcher' => $this,
-            'package'    => $this->package,
-            'func'       => $func,
-            'args'       => $args,
+            'package'    => $req->package,
+            'func'       => $req->func,
+            'args'       => $req->args,
             'void'       => true,
-            'meta'       => $this->_meta,
+            'meta'       => $req->meta,
             'result'     => null,
             'error'      => null,
             'exception'  => null,
         ]));
-        $this->resetMeta();
     }
 
     public function asyncCall(string $func, ...$args): Receiver {
-        $this->driver->checkPackage();
-        X::bus()->dispatch(new BeforeCall([
-            'dispatcher' => $this,
-            'void'       => false,
-            'package'    => $this->package,
-            'func'       => $func,
-            'args'       => $args,
-        ]));
-        return $this->driver->send(new Request($this->package, [
-            'func' => $func,
-            'args' => $args,
-            'void' => false,
-            'meta' => $this->_meta,
-        ], $this->conf['messageOpts']));
+        return $this->send($this->prepareCall($func, $args, false));
     }
 
     /**
@@ -274,6 +263,7 @@ class RPC extends Component implements IRequestHandler {
     }
 
     public function listen() {
+        $this->listenPackage = $this->package;
         $this->driver->onRequest($this)->listen();
     }
 
