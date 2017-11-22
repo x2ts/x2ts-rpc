@@ -226,14 +226,18 @@ class AMQP extends Driver {
         return $this->_serverExchange;
     }
 
+    private $_connection;
+
     private function getConnection(array $conf, bool $persistent = false): AMQPConnection {
-        $connection = new AMQPConnection($conf);
-        if ($persistent) {
-            $connection->pconnect();
-        } else {
-            $connection->connect();
+        if (!$this->_connection instanceof AMQPConnection) {
+            $this->_connection = new AMQPConnection($conf);
+            if ($persistent) {
+                $this->_connection->pconnect();
+            } else {
+                $this->_connection->connect();
+            }
         }
-        return $connection;
+        return $this->_connection;
     }
 
     private function getClientChannel() {

@@ -55,7 +55,7 @@ class AMQPReceiver extends Receiver {
             }
             X::bus()->dispatch(new AfterCall([
                 'dispatcher' => $this,
-                'package'    => null,
+                'package'    => $this->request->package,
                 'func'       => $this->request->func,
                 'args'       => $this->request->args,
                 'void'       => $this->request->void,
