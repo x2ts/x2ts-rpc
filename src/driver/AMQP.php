@@ -102,7 +102,7 @@ class AMQP extends Driver {
             $this->queueName(),
             AMQP_NOPARAM,
             [
-                'correlation_id' => $this->request['id'],
+                'correlation_id' => $req->id,
                 'reply_to'       => $replyQueue->getName(),
             ]
         );
