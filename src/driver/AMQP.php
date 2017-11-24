@@ -237,6 +237,9 @@ class AMQP extends Driver {
                 $this->_connection->connect();
             }
         }
+        if (!$this->_connection->isConnected()) {
+            $this->_connection->reconnect();
+        }
         return $this->_connection;
     }
 
@@ -247,6 +250,9 @@ class AMQP extends Driver {
                 $this->conf['persistent']
             ));
             $this->_clientChannel->setPrefetchCount(1);
+        }
+        if (!$this->_clientChannel->isConnected()) {
+            $this->_clientChannel->getConnection()->reconnect();
         }
         return $this->_clientChannel;
     }
@@ -260,6 +266,10 @@ class AMQP extends Driver {
                 $conf,
                 (bool) $this->conf['persistent']
             ));
+            $this->_serverChannel->setPrefetchCount(1);
+        }
+        if (!$this->_serverChannel->isConnected()) {
+            $this->_serverChannel->getConnection()->reconnect();
             $this->_serverChannel->setPrefetchCount(1);
         }
         return $this->_serverChannel;
