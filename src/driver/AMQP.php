@@ -226,52 +226,71 @@ class AMQP extends Driver {
         return $this->_serverExchange;
     }
 
-    private $_connection;
+    private $_connection = [
+        'connection' => null,
+        'time'       => 0,
+        'errs'       => 0,
+    ];
 
-    private function getConnection(array $conf, bool $persistent = false): AMQPConnection {
-        if (!$this->_connection instanceof AMQPConnection) {
-            $this->_connection = new AMQPConnection($conf);
-            if ($persistent) {
-                $this->_connection->pconnect();
-            } else {
-                $this->_connection->connect();
+    /**
+     * @return AMQPConnection
+     * @throws \AMQPConnectionException
+     */
+    private function getConnection(): AMQPConnection {
+        $container =& $this->_connection;
+        $conf = $this->conf;
+        while (true) {
+            try {
+                if (!$container['connection'] instanceof AMQPConnection) {
+                    $container['connection'] = new AMQPConnection($conf);
+                    if ($conf['persistent'] ?? false) {
+                        $container['connection']->pconnect();
+                    } else {
+                        $container['connection']->connect();
+                    }
+                }
+                if (!$container['connection']->isConnected()) {
+                    if ($conf['persistent']) {
+                        $container['connection']->preconnect();
+                    } else {
+                        $container['connection']->reconnect();
+                    }
+                }
+                return $container['connection'];
+            } catch (\AMQPConnectionException $ex) {
+                if (time() - $container['time'] > 60) {
+                    $container['errs'] = 0;
+                }
+                $container['time'] = time();
+                $container['errs']++;
+                if ($container['errs'] > 3) {
+                    throw $ex;
+                }
             }
         }
-        if (!$this->_connection->isConnected()) {
-            $this->_connection->reconnect();
-        }
-        return $this->_connection;
     }
 
     private function getClientChannel() {
-        if (!$this->_clientChannel instanceof AMQPChannel) {
-            $this->_clientChannel = new AMQPChannel($this->getConnection(
-                $this->conf,
-                $this->conf['persistent']
-            ));
+        if (!$this->_clientChannel instanceof AMQPChannel ||
+            !$this->_clientChannel->isConnected()
+        ) {
+            $this->_clientChannel = new AMQPChannel($this->getConnection());
             $this->_clientChannel->setPrefetchCount(1);
         }
-        if (!$this->_clientChannel->isConnected()) {
-            $this->_clientChannel->getConnection()->reconnect();
-        }
+        $this->_clientChannel
+            ->getConnection()
+            ->setReadTimeout($this->conf['read_timeout']);
         return $this->_clientChannel;
     }
 
     private function getServerChannel() {
-        if (!$this->_serverChannel instanceof AMQPChannel) {
-            $conf = $this->conf;
-            $conf['read_timeout'] = 0;
-
-            $this->_serverChannel = new AMQPChannel($this->getConnection(
-                $conf,
-                (bool) $this->conf['persistent']
-            ));
+        if (!$this->_serverChannel instanceof AMQPChannel ||
+            !$this->_serverChannel->isConnected()
+        ) {
+            $this->_serverChannel = new AMQPChannel($this->getConnection());
             $this->_serverChannel->setPrefetchCount(1);
         }
-        if (!$this->_serverChannel->isConnected()) {
-            $this->_serverChannel->getConnection()->reconnect();
-            $this->_serverChannel->setPrefetchCount(1);
-        }
+        $this->_serverChannel->getConnection()->setReadTimeout(0);
         return $this->_serverChannel;
     }
 

@@ -37,7 +37,7 @@ class RPCTest extends TestCase {
 
     public static function tearDownAfterClass() {
         if (is_resource(self::$server)) {
-            proc_terminate(self::$server);
+            proc_terminate(self::$server, SIGINT);
             proc_close(self::$server);
         }
     }
@@ -81,8 +81,16 @@ class RPCTest extends TestCase {
             self::assertEquals('throwException', $ex->remoteMessage);
             self::assertEquals(333, $ex->remoteCode);
             self::assertEquals(__DIR__ . '/server.php', $ex->remoteFile);
-            self::assertEquals(38, $ex->remoteLine);
+            self::assertEquals(104, $ex->remoteLine);
         }
+    }
+
+    /**
+     * @expectedException \x2ts\rpc\RPCException
+     * @expectedExceptionMessageRegExp /Consumer timeout exceed/
+     */
+    public function testServerSleep() {
+        $this->getRpc()->call('serverSleep', 5);
     }
 
     private function getRpc() {

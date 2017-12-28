@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "content-hash": "8ba1f0bef456e71bd2112c9def3862d2",
+    "content-hash": "d59bed3d9efa74220570ca720adce822",
     "packages": [
         {
             "name": "monolog/monolog",
@@ -136,7 +136,7 @@
             "version": "v2.3.3",
             "source": {
                 "type": "git",
-                "url": "https://github.com/x2ts/x2ts.git",
+                "url": "git@git.neoteched.com:x2ts/x2ts.git",
                 "reference": "f807f7d158a7225b5a5a6993fe6496d5bdda9a1f"
             },
             "dist": {
@@ -1638,6 +1638,48 @@
                 "validate"
             ],
             "time": "2016-11-23T20:04:58+00:00"
+        },
+        {
+            "name": "x2ts/x2ts-daemon",
+            "version": "v2.0.0",
+            "source": {
+                "type": "git",
+                "url": "git@git.neoteched.com:x2ts/x2ts-daemon.git",
+                "reference": "a7ea2306fb4421cfa630beb003ce622f895e28ea"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://satis.neoteched.com/dist/x2ts/x2ts-daemon/x2ts-x2ts-daemon-v2.0.0-a07578.zip",
+                "reference": "a7ea2306fb4421cfa630beb003ce622f895e28ea",
+                "shasum": "ab56b82e49e41b2da6b68a25b46d398665af8ac2"
+            },
+            "require": {
+                "ext-swoole": ">=1.9.6",
+                "x2ts/x2ts": "^2.0.0"
+            },
+            "require-dev": {
+                "phpunit/php-code-coverage": "^5.1",
+                "phpunit/phpunit": "6.1.*"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "x2ts\\daemon\\": [
+                        "src"
+                    ]
+                }
+            },
+            "license": [
+                "BSD"
+            ],
+            "authors": [
+                {
+                    "name": "TingSong-Syu",
+                    "email": "rek@rek.me"
+                }
+            ],
+            "description": "The daemon module",
+            "time": "2017-04-11T03:41:31+00:00"
         }
     ],
     "aliases": [],

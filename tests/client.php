@@ -37,3 +37,9 @@ $rpc->saveConf([
 
 $r = $rpc->call('reverse', 'welcome');
 echo $r, "\n";
+
+$r = $rpc->call('sleepFor', 5);
+echo $r, "\n";
+
+$r = $rpc->call('serverSleep', 5);
+echo $r, "\n";
