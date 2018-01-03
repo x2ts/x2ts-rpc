@@ -38,36 +38,43 @@ class AMQPReceiver extends Receiver {
         }
         $result = null;
         $throw = null;
-        $this->q->consume(function (AMQPEnvelope $msg, AMQPQueue $q) use (&$result, &$throw) {
-            error_clear_last();
-            $res = Response::parse($msg->getBody(), $this->request->package);
+        try {
+            $this->q->consume(function (AMQPEnvelope $msg, AMQPQueue $q) use (&$result, &$throw) {
+                error_clear_last();
+                $res = Response::parse($msg->getBody(), $this->request->package);
 //            X::logger()->trace($res);
-            $error = error_get_last();
-            if (!empty($error)) {
-                $throw = new PacketFormatException(
-                    'Response packet format error: ' . $error['message'] .
-                    ' in file ' . $error['file'] . ' (line: ' . $error['line'] . ')',
-                    PacketFormatException::RESPONSE
-                );
-            } else {
-                $throw = $res->exception;
-                $result = $res->result;
+                $error = error_get_last();
+                if (!empty($error)) {
+                    $throw = new PacketFormatException(
+                        'Response packet format error: ' . $error['message'] .
+                        ' in file ' . $error['file'] . ' (line: ' . $error['line'] . ')',
+                        PacketFormatException::RESPONSE
+                    );
+                } else {
+                    $throw = $res->exception;
+                    $result = $res->result;
+                }
+                X::bus()->dispatch(new AfterCall([
+                    'dispatcher' => $this,
+                    'package'    => $this->request->package,
+                    'func'       => $this->request->func,
+                    'args'       => $this->request->args,
+                    'void'       => $this->request->void,
+                    'meta'       => $this->request->meta,
+                    'result'     => $result,
+                    'error'      => $res->error,
+                    'exception'  => $throw,
+                ]));
+                $q->ack($msg->getDeliveryTag());
+                $q->delete();
+                return false;
+            });
+        } catch (\AMQPQueueException $ex) {
+            if (stripos($ex->getMessage(), 'Consumer timeout exceed') !== false) {
+                $this->q->delete();
             }
-            X::bus()->dispatch(new AfterCall([
-                'dispatcher' => $this,
-                'package'    => $this->request->package,
-                'func'       => $this->request->func,
-                'args'       => $this->request->args,
-                'void'       => $this->request->void,
-                'meta'       => $this->request->meta,
-                'result'     => $result,
-                'error'      => $res->error,
-                'exception'  => $throw,
-            ]));
-            $q->ack($msg->getDeliveryTag());
-            $q->delete();
-            return false;
-        });
+            $throw = $ex;
+        }
         if ($throw instanceof \Throwable) {
             throw $throw;
         }

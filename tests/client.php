@@ -21,7 +21,7 @@ $rpc->saveConf([
             'login'           => 'guest',
             'password'        => 'guest',
             'vhost'           => '/',
-            'read_timeout'    => 30,
+            'read_timeout'    => 6,
             'write_timeout'   => 30,
             'connect_timeout' => 30,
             'persistent'      => false,
@@ -38,8 +38,8 @@ $rpc->saveConf([
 $r = $rpc->call('reverse', 'welcome');
 echo $r, "\n";
 
-$r = $rpc->call('sleepFor', 5);
+$r = $rpc->call('sleepFor', 7);
 echo $r, "\n";
 
-$r = $rpc->call('serverSleep', 5);
-echo $r, "\n";
+//$r = $rpc->call('serverSleep', 5);
+//echo $r, "\n";
